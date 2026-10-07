@@ -1,128 +1,130 @@
-# Tutorial de Instalação — claude-video-kit
+# Installation Tutorial — claude-video-kit
 
-Skills do Claude Code para gerar vídeos MP4 programados frame a frame (canvas HTML), com trilha de fundo e efeitos sonoros sincronizados. Este tutorial cobre a instalação no **Windows** (PowerShell); os comandos de `pip`/`python` valem também para Linux/macOS, exceto os passos de extração do zip e de cópia de pastas, indicados à parte.
+Claude Code skills to generate MP4 videos programmed frame by frame (HTML canvas), with a synchronized background track and sound effects. This tutorial covers installation on **Windows** (PowerShell); the `pip`/`python` commands also apply to Linux/macOS, except for the zip-extraction and folder-copy steps, which are noted separately.
 
-## 1. Pré-requisitos
+## 1. Prerequisites
 
-| Requisito | Como verificar |
+| Requirement | How to check |
 |---|---|
 | Python 3.10+ | `python --version` |
-| pip funcionando no mesmo Python | `python -m pip --version` |
-| Claude Code instalado | já em uso, se você está lendo isto por ele |
+| pip working on the same Python | `python -m pip --version` |
+| Claude Code installed | already in use, if you're reading this through it |
 
-> **Atenção a múltiplas instalações de Python.** Se o Windows tiver mais de uma versão instalada (comum quando se instala o Python mais de uma vez ao longo do tempo), o comando `python` e o comando `pip` podem apontar para instalações diferentes — e aí um pacote instalado via `pip` não aparece quando você roda `python`. Para checar:
+> **Watch out for multiple Python installations.** If Windows has more than one version installed (common when Python gets installed more than once over time), the `python` command and the `pip` command may point to different installations — and then a package installed via `pip` won't show up when you run `python`. To check:
 > ```powershell
 > where.exe python
 > where.exe pip
 > ```
-> Se os caminhos forem de pastas diferentes (ex.: `Python314` vs `Python313`), **sempre use `python -m pip install ...`** em vez de `pip install ...` solto, para garantir que a instalação vai para o Python que você realmente vai executar. Ou use o launcher `py -3.13 ...` / `py -3.14 ...` para fixar a versão em todos os comandos.
+> If the paths are from different folders (e.g. `Python314` vs `Python313`), **always use `python -m pip install ...`** instead of a bare `pip install ...`, to make sure the install goes into the Python you'll actually run. Or use the `py -3.13 ...` / `py -3.14 ...` launcher to pin the version across all commands.
 
-## 2. Extrair o pacote
+## 2. Extract the package
 
-O Windows não tem o comando `unzip` por padrão. Use:
+Windows doesn't have the `unzip` command by default. Use:
 ```powershell
 Expand-Archive -Path claude-video-kit.zip -DestinationPath . -Force
 cd claude-video-kit
 ```
-Confirme que você está na pasta certa (deve conter `README.md`, `requirements.txt` e a pasta `skills\`):
+Confirm you're in the right folder (it should contain `README.md`, `requirements.txt`, and the `skills\` folder):
 ```powershell
 dir
 ```
 
-## 3. Instalar as dependências Python
+## 3. Install the Python dependencies
 
 ```powershell
 python -m pip install -r requirements.txt
 ```
-Isso instala `playwright`, `imageio-ffmpeg` e `numpy`. Se aparecer "Requirement already satisfied" mas depois um teste disser `ModuleNotFoundError`, é o problema de múltiplas instalações descrito no passo 1 — repita o comando com `python -m pip` (não `pip` sozinho) ou fixe a versão com `py -3.13 -m pip install -r requirements.txt`.
+This installs `playwright`, `imageio-ffmpeg`, and `numpy`. If it says "Requirement already satisfied" but a later test says `ModuleNotFoundError`, that's the multiple-installations issue from step 1 — repeat the command with `python -m pip` (not a bare `pip`) or pin the version with `py -3.13 -m pip install -r requirements.txt`.
 
-## 4. Garantir um navegador para o Playwright
+## 4. Make sure a browser is available for Playwright
 
-O renderizador precisa de um Chromium, Edge ou Chrome instalado para desenhar os quadros em segundo plano (headless). Teste:
+The renderer needs a Chromium, Edge, or Chrome browser installed to draw the frames in the background (headless). Test it:
 ```powershell
 python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); b = p.chromium.launch(); print('OK:', b.version); b.close(); p.stop()"
 ```
-- Se funcionar, ótimo — os scripts vão usar esse Chromium automaticamente (`--navegador auto`, o padrão).
-- Se der erro pedindo para instalar o navegador, rode uma vez:
+- If it works, great — the scripts will use that Chromium automatically (`--navegador auto`, the default).
+- If it errors out asking you to install the browser, run once:
   ```powershell
   python -m playwright install chromium
   ```
-- Alternativa (mais rápida, pois o Windows já traz o Edge): passe `--navegador msedge` nos comandos dos passos 5 e 6, sem precisar instalar nada extra.
+- Faster alternative (since Windows already ships with Edge): pass `--navegador msedge` on the commands in steps 5 and 6, with nothing extra to install.
 
-## 5. Testar a prévia visual (antes de renderizar o MP4)
+## 5. Test the visual preview (before rendering the MP4)
 
 ```powershell
 python skills\video-programatico\scripts\preview_frames.py skills\video-programatico\assets\template.html preview.png --frames 15 150 300 450 --colunas 2
 ```
-Abra `preview.png` no Explorador de Arquivos. Deve mostrar 4 quadros de exemplo (fundo animado, gráfico de barras, lista de passos numerados e tela final com botão de play). Se as imagens aparecerem corretamente, o motor de desenho está funcionando.
+Open `preview.png` in File Explorer. It should show 4 example frames (animated background, bar chart, numbered step list, and a final screen with a play button). If the images render correctly, the drawing engine is working.
 
-## 6. Testar o render de MP4
+## 6. Test the MP4 render
 
-Primeiro um teste curto (só os 3 segundos iniciais, mais rápido):
+First a short test (just the first 3 seconds, faster):
 ```powershell
 python skills\video-programatico\scripts\renderizar_mp4.py skills\video-programatico\assets\template.html video.mp4 --musica nenhuma --ate-frame 90
 ```
-Abra `video.mp4` — deve tocar normalmente. Depois, se quiser, renderize o exemplo completo (sem `--ate-frame`, com música):
+Open `video.mp4` — it should play normally. Then, if you want, render the full example (without `--ate-frame`, with music):
 ```powershell
 python skills\video-programatico\scripts\renderizar_mp4.py skills\video-programatico\assets\template.html video_completo.mp4 --musica calma
 ```
 
-Confira o resultado com o ffmpeg incluso no pacote `imageio-ffmpeg`:
+Check the result with the ffmpeg bundled in the `imageio-ffmpeg` package:
 ```powershell
 $FFMPEG = python -c "import imageio_ffmpeg;print(imageio_ffmpeg.get_ffmpeg_exe())"
 & $FFMPEG -hide_banner -i video.mp4
 ```
-Espera-se ver `h264 ... 1280x720 ... 30 fps` e `Audio: aac ... stereo`. O exit code 1 ao final é normal (o comando não recebeu arquivo de saída, só a inspeção).
+You should see `h264 ... 1280x720 ... 30 fps` and `Audio: aac ... stereo`. Exit code 1 at the end is normal (the command received no output file, just the inspection).
 
-Repita os passos 5 e 6 trocando `video-programatico` por `video-frame-a-frame` para validar a segunda skill.
+Repeat steps 5 and 6, swapping `video-programatico` for `video-frame-a-frame` to validate the second skill.
 
-## 7. Instalar como skill no Claude Code
+## 7. Install as a Claude Code skill
 
-Isso é o que faz o Claude passar a reconhecer e usar as skills automaticamente quando você pedir um vídeo no chat.
+This is what makes Claude automatically recognize and use the skills when you ask for a video in chat.
 
-**Opção A — pessoal (todas as suas conversas nesta máquina):**
+**Option A — personal (all your conversations on this machine):**
 ```powershell
 mkdir "$env:USERPROFILE\.claude\skills" -Force
 Copy-Item -Recurse -Force skills\video-programatico "$env:USERPROFILE\.claude\skills\"
 Copy-Item -Recurse -Force skills\video-frame-a-frame "$env:USERPROFILE\.claude\skills\"
 ```
 
-**Opção B — por repositório (compartilhado com o time via Git):**
+**Option B — per repository (shared with the team via Git):**
 ```powershell
 mkdir .claude\skills -Force
 Copy-Item -Recurse -Force skills\video-programatico .claude\skills\
 Copy-Item -Recurse -Force skills\video-frame-a-frame .claude\skills\
 ```
-Rode isso dentro da pasta raiz do repositório onde você quer disponibilizar as skills para o time, e faça commit da pasta `.claude\skills\`.
+Run this inside the root folder of the repository where you want to make the skills available to the team, and commit the `.claude\skills\` folder.
 
-## 8. Usar
+## 8. Usage
 
-Abra uma conversa do Claude Code (nessa máquina ou, se instalou por repositório, com aquela pasta como diretório de trabalho) e peça em português o que você quer:
+Open a Claude Code conversation (on this machine, or, if installed per repository, with that folder as the working directory) and ask for what you want:
 
-> *"crie um vídeo de 20 segundos, 16:9, explicando os benefícios do novo processo seletivo da empresa"*
+> *"create a 20-second, 16:9 video explaining the benefits of the company's new hiring process"*
 
-> *"faça um vídeo tutorial mostrando como cadastrar um cliente no ServiceNow, com cursor e cliques"*
+> *"make a tutorial video showing how to register a customer in ServiceNow, with cursor and clicks"*
 
-O Claude segue o procedimento do `SKILL.md` correspondente: briefing → storyboard → edição do roteiro no template → validação com `preview_frames.py` → render com `renderizar_mp4.py` → entrega do `.html` e do `.mp4`. Se ele não acionar a skill sozinho, force citando o nome: `/video-programatico` ou `/video-frame-a-frame`.
+Claude follows the matching `SKILL.md` procedure: briefing → storyboard → editing the script in the template → validation with `preview_frames.py` → rendering with `renderizar_mp4.py` → delivery of the `.html` and `.mp4`. If it doesn't trigger the skill on its own, force it by naming it: `/video-programatico` or `/video-frame-a-frame`.
 
-## 9. Solução de problemas (erros já vistos)
+## 9. Troubleshooting (errors already seen)
 
-| Erro | Causa | Solução |
+| Error | Cause | Fix |
 |---|---|---|
-| `unzip : O termo 'unzip' não é reconhecido...` | PowerShell não tem `unzip` | Use `Expand-Archive -Path ... -DestinationPath . -Force` |
-| `ModuleNotFoundError: No module named 'playwright'` logo após um `pip install` que disse "already satisfied" | `python` e `pip` apontam para instalações diferentes do Python | Rode `where.exe python` e `where.exe pip`; use sempre `python -m pip install ...` ou fixe a versão com `py -3.13 ...` |
-| Erro pedindo para instalar o executável do navegador ao rodar `renderizar_mp4.py`/`preview_frames.py` | Nenhum Chromium do Playwright instalado | `python -m playwright install chromium`, ou use `--navegador msedge` (Windows já traz o Edge) |
-| `canvas ...: largura e altura precisam ser pares` | Um `FORMATO`/resolução customizado no roteiro ficou ímpar | Ajuste a resolução no HTML para valores pares (os formatos padrão do template já são pares) |
-| `ffmpeg falhou (...)` | Geralmente áudio ou vídeo corrompido no meio do processo | Rode de novo com `--ate-frame 90` para isolar se o problema é no vídeo ou no áudio; cheque o `_log_mp4.txt` se estiver usando |
+| `unzip : The term 'unzip' is not recognized...` | PowerShell has no `unzip` | Use `Expand-Archive -Path ... -DestinationPath . -Force` |
+| `ModuleNotFoundError: No module named 'playwright'` right after a `pip install` that said "already satisfied" | `python` and `pip` point to different Python installations | Run `where.exe python` and `where.exe pip`; always use `python -m pip install ...`, or pin the version with `py -3.13 ...` |
+| Error asking to install the browser executable when running `renderizar_mp4.py`/`preview_frames.py` | No Playwright Chromium installed | `python -m playwright install chromium`, or use `--navegador msedge` (Windows already ships with Edge) |
+| `canvas ...: width and height must be even` | A custom `FORMATO`/resolution in the script ended up odd | Adjust the resolution in the HTML to even values (the template's default formats are already even) |
+| `ffmpeg falhou (...)` | Usually audio or video corrupted mid-process | Run again with `--ate-frame 90` to isolate whether the issue is in the video or the audio; check `_log_mp4.txt` if you're using it |
 
-## 10. Referência rápida de comandos
+## 10. Quick command reference
 
 ```powershell
-# prévia visual
-python skills\<skill>\scripts\preview_frames.py <animacao.html> <preview.png> --frames 60 200 400 600 --colunas 2
+# visual preview
+python skills\<skill>\scripts\preview_frames.py <animation.html> <preview.png> --frames 60 200 400 600 --colunas 2
 
-# render final
-python skills\<skill>\scripts\renderizar_mp4.py <animacao.html> <saida.mp4> --musica calma|animada|nenhuma|<arquivo.mp3> [--volume-musica 0.6] [--ate-frame 150] [--navegador auto|chromium|msedge|chrome]
+# final render
+python skills\<skill>\scripts\renderizar_mp4.py <animation.html> <output.mp4> --musica calma|animada|nenhuma|<arquivo.mp3> [--volume-musica 0.6] [--ate-frame 150] [--navegador auto|chromium|msedge|chrome]
 ```
 
-Troque `<skill>` por `video-programatico` ou `video-frame-a-frame`, conforme o tipo de vídeo.
+Replace `<skill>` with `video-programatico` or `video-frame-a-frame`, depending on the type of video.
+
+> Note: command-line flag names (`--musica`, `--volume-musica`, `--navegador`, `--ate-frame`, `--frames`, `--colunas`) stay in Portuguese, matching the scripts' actual argument names — they are not translated here since that would break the commands.

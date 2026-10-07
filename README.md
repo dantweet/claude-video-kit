@@ -1,64 +1,66 @@
 # claude-video-kit
 
-Skills do **Claude Code** para gerar **vídeos MP4 programados frame a frame**: cada quadro é desenhado por código num canvas HTML, e o vídeo sai com trilha de fundo e efeitos sonoros sincronizados (cliques, pop, whoosh, ding, digitação etc.).
+**Claude Code** skills that generate **MP4 videos programmatically, frame by frame**: every frame is drawn by code on an HTML canvas, and the video comes out with a synchronized background track and sound effects (clicks, pops, whooshes, dings, typing, etc.).
 
-Adaptação de um kit equivalente feito originalmente para o GitHub Copilot, convertido para o formato de skills do Claude Code — mantendo o mesmo motor de animação e o mesmo renderizador. Só a instalação, o navegador padrão e o passo de validação visual foram adaptados.
+Adapted from an equivalent kit originally built for GitHub Copilot, converted to the Claude Code skills format — keeping the same animation engine and renderer. Only the installation, default browser, and visual-validation step were adapted.
 
-| Skill | Para quê |
+| Skill | What it's for |
 |---|---|
-| `video-programatico` | Qualquer vídeo: explicativo, motion graphics, gráfico animado, vinheta, logo animado, comunicado, redes sociais (16:9, 9:16, 1:1, 4:5) |
-| `video-frame-a-frame` | Tutorial de sistema/tela: layout real, cursor, cliques, legendas "PASSO n/N" |
+| `video-programatico` | Any video: explainer, motion graphics, animated chart, stinger, animated logo, announcement, social media (16:9, 9:16, 1:1, 4:5) |
+| `video-frame-a-frame` | System/screen tutorial: real layout, cursor, clicks, "STEP n/N" captions |
 
-Basta pedir no chat (ex.: *"crie um vídeo vertical de 20s anunciando o novo processo seletivo"*). O Claude monta o storyboard, programa as cenas, valida os quadros e gera o MP4.
+Just ask in chat (e.g. *"create a 20s vertical video announcing the new hiring process"*). Claude builds the storyboard, codes the scenes, validates the frames, and generates the MP4.
 
-## Instalação
+## Installation
 
-**Pessoal (todas as suas conversas do Claude Code)**
+**Personal (all your Claude Code conversations)**
 ```bash
 cp -r skills/video-programatico skills/video-frame-a-frame ~/.claude/skills/
 ```
 
-**Em um repositório (compartilhado com o time, versionado no Git)**
+**In a repository (shared with the team, version-controlled in Git)**
 ```bash
 mkdir -p .claude/skills
 cp -r skills/video-programatico skills/video-frame-a-frame .claude/skills/
 ```
 
-Depois disso, basta pedir um vídeo no chat do Claude Code (ou invocar por nome, ex. `/video-programatico`) dentro da pasta/perfil onde as skills foram copiadas.
+After that, just ask for a video in the Claude Code chat (or invoke it by name, e.g. `/video-programatico`) from the folder/profile where the skills were copied.
 
-## Dependências (só para gerar o MP4)
+## Dependencies (only needed to render the MP4)
 
-- Python 3.10+ e `pip install --break-system-packages -r requirements.txt` (playwright, imageio-ffmpeg, numpy)
-- Um Chromium/Edge/Chrome disponível:
-  - No sandbox do Claude Code, o Chromium já vem pré-instalado (nada a fazer, use `--navegador auto`, que é o padrão).
-  - Fora do sandbox (ex.: rodando no computador do usuário via dispositivo conectado), rode `playwright install chromium` uma vez, ou use `--navegador msedge`/`chrome` se um deles já estiver instalado.
+- Python 3.10+ and `pip install --break-system-packages -r requirements.txt` (playwright, imageio-ffmpeg, numpy)
+- A Chromium/Edge/Chrome browser available:
+  - In the Claude Code sandbox, Chromium already comes pre-installed (nothing to do, use `--navegador auto`, the default).
+  - Outside the sandbox (e.g. running on the user's computer via a connected device), run `playwright install chromium` once, or use `--navegador msedge`/`chrome` if one of them is already installed.
 
-A animação HTML abre em qualquer navegador sem dependências, mesmo sem Python.
+The HTML animation opens in any browser with no dependencies, even without Python.
 
-## Uso direto dos scripts
+## Using the scripts directly
 
 ```bash
-# validar frames antes de renderizar (gera um PNG com várias prévias; abra com a ferramenta Read)
+# validate frames before rendering (generates a PNG with several previews; open it with the Read tool)
 python skills/video-programatico/scripts/preview_frames.py video.html preview.png --frames 45 180 330 480
 
-# renderizar o MP4 final
+# render the final MP4
 python skills/video-programatico/scripts/renderizar_mp4.py video.html video.mp4 --musica calma|animada|nenhuma|arquivo.mp3 [--volume-musica 0.6] [--ate-frame 150]
 ```
 
-## Regras embutidas
+> Note: the script flags themselves (`--musica`, `--volume-musica`, `--navegador`, `--ate-frame`, `--frames`, `--colunas`) are kept in Portuguese to match the engine's source code and `SKILL.md` files — see each skill's `SKILL.md` for the full option reference.
 
-- Frames determinísticos (`desenhar(f)` puro), sons no mesmo instante do evento visual.
-- Só ativos com direito de uso: tudo gerado por código, imagens/logos fornecidos pelo usuário, áudio sintetizado ou arquivo licenciado.
-- Dados pessoais sempre fictícios (LGPD).
+## Built-in rules
 
-## O que mudou em relação ao kit original (Copilot)
+- Deterministic frames (pure `desenhar(f)`), sounds triggered at the exact instant of the visual event.
+- Only assets with proper usage rights: everything code-generated, images/logos supplied by the user, synthesized audio, or a licensed file.
+- Personal data always fictional (privacy-by-design / LGPD-style data minimization).
 
-- **Instalação**: pastas `skills/` copiadas para `~/.claude/skills/` (pessoal) ou `.claude/skills/` de um repositório (time), em vez de `~/.copilot/skills` / `.github/skills` e do fluxo `copilot plugin install`.
-- **Navegador padrão do renderizador**: `--navegador auto` tenta primeiro o Chromium embutido do Playwright (já presente no sandbox do Claude Code) e só então cai para Edge/Chrome do sistema — o original assumia sempre o Edge do Windows.
-- **Validação visual**: em vez do truque de `page.evaluate` num "navegador integrado" específico do Copilot, cada skill ganhou `scripts/preview_frames.py`, que gera uma prancha de contato em PNG a partir da própria animação HTML; o Claude abre esse PNG com a ferramenta **Read** para inspecionar os quadros.
-- **Execução longa**: as instruções passaram a recomendar rodar o render em segundo plano com log em arquivo, adequado ao limite de tempo das chamadas de shell do Claude Code.
-- O motor de animação (`template.html`) e a síntese de áudio (`renderizar_mp4.py`) são os mesmos do kit original — só o bloco de abertura do navegador foi generalizado.
+## What changed from the original (Copilot) kit
+
+- **Installation**: `skills/` folders copied to `~/.claude/skills/` (personal) or a repository's `.claude/skills/` (team), instead of `~/.copilot/skills` / `.github/skills` and the `copilot plugin install` flow.
+- **Renderer's default browser**: `--navegador auto` first tries Playwright's bundled Chromium (already present in the Claude Code sandbox) and only then falls back to the system's Edge/Chrome — the original always assumed Windows Edge.
+- **Visual validation**: instead of the `page.evaluate` trick in a Copilot-specific "integrated browser", each skill gained `scripts/preview_frames.py`, which generates a PNG contact sheet straight from the HTML animation; Claude opens that PNG with the **Read** tool to inspect the frames.
+- **Long-running execution**: the instructions now recommend running the render in the background with a log file, suited to Claude Code's shell call time limits.
+- The animation engine (`template.html`) and audio synthesis (`renderizar_mp4.py`) are the same as the original kit — only the browser-launch block was generalized.
 
 ## Higgsfield
 
-O repositório `higgsfield-ai/higgsfield` é um orquestrador de treino distribuído de LLMs e **não gera vídeo**; não é dependência deste kit. A plataforma comercial Higgsfield AI pode ser usada manualmente para pós-produção do MP4.
+The `higgsfield-ai/higgsfield` repository is a distributed LLM training orchestrator and **does not generate video**; it is not a dependency of this kit. The commercial Higgsfield AI platform can be used manually for post-production on the generated MP4.
