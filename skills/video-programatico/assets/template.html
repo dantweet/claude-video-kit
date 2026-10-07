@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Vídeo programático</title>
+<style>
+  body { margin: 0; padding: 16px; background: #11151c; color: #e8edf3; font-family: "Segoe UI", Arial, sans-serif;
+         display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  canvas { max-width: min(100%, 1280px); max-height: 78vh; border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,.5); background: #000; }
+  .controles { width: min(100%, 1280px); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .controles button { background: #2d3a4f; color: #fff; border: 1px solid #44536b; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 14px; }
+  .controles input[type=range] { flex: 1; min-width: 200px; }
+  #contador { font-variant-numeric: tabular-nums; min-width: 190px; text-align: right; font-size: 13px; color: #b9c4d3; }
+</style>
+</head>
+<body>
+<canvas id="tela"></canvas>
+<div class="controles">
+  <button id="btnPlay">Pausar</button>
+  <button id="btnPrev">&#9664; frame</button>
+  <button id="btnNext">frame &#9654;</button>
+  <input id="barra" type="range" min="0" value="0">
+  <span id="contador"></span>
+</div>
+<script>
+// =====================================================================
+// ROTEIRO — edite esta seção. Tempos em segundos.
+// Cada cena recebe (tl, p): tl = tempo local da cena, p = progresso 0..1.
+// Tudo deve derivar do tempo: nada de Date.now() ou Math.random() (use rng(seed)).
+// =====================================================================
+const FORMATO = '16:9';          // '16:9' | '1080p' | '9:16' | '1:1' | '4:5'
+const FPS = 30;
+const PALETA = {
+  fundo1: '#0b1a33', fundo2: '#003974', primaria: '#199ed8', acento: '#ffb703',
+  sucesso: '#2ec27e', texto: '#ffffff', suave: 'rgba(255,255,255,.72)'
+};
+const FONTE = '"Segoe UI", Arial, sans-serif';
+
+// Imagens locais opcionais (caminho relativo ao HTML). Use só arquivos com direito de uso.
+const IMAGENS = { /* logo: 'logo.png' */ };
+
+// transicao (entrada da cena): 'corte' | 'fade' | 'slide' | 'slideCima' | 'zoom' | 'wipe'
+const CENAS = [
+  { ini: 0,  fim: 4,  transicao: 'corte', desenhar: cenaAbertura },
+  { ini: 4,  fim: 9,  transicao: 'slide', desenhar: cenaGrafico },
+  { ini: 9,  fim: 14, transicao: 'zoom',  desenhar: cenaPassos },
+  { ini: 14, fim: 17, transicao: 'wipe',  desenhar: cenaFinal }
+];
+const DURACAO = 17;
+const DURACAO_TRANSICAO = 0.5;
+
+// Eventos sonoros lidos pelo renderizador.
+// tipos: clique | digitar(dur) | pop | ding | sucesso | erro | notificacao | whoosh(dur) | impacto | subida(dur) | tique(dur)
+const SONS = [
+  { t: 0.15, tipo: 'subida', dur: 1.0 },
+  { t: 1.2,  tipo: 'impacto' },
+  { t: 2.0,  tipo: 'digitar', dur: 1.0 },
+  { t: 3.8,  tipo: 'whoosh', dur: 0.6 },
+  { t: 4.8,  tipo: 'tique', dur: 2.0 },
+  { t: 6.9,  tipo: 'ding' },
+  { t: 8.8,  tipo: 'whoosh', dur: 0.6 },
+  { t: 9.6,  tipo: 'pop' }, { t: 10.4, tipo: 'pop' }, { t: 11.2, tipo: 'pop' },
+  { t: 12.2, tipo: 'sucesso' },
+  { t: 13.8, tipo: 'whoosh', dur: 0.6 },
+  { t: 14.6, tipo: 'impacto' }
+];
+
+// Legendas opcionais: [ini, fim, texto]
+const LEGENDAS = [];
+
+function cenaAbertura(tl, p) {
+  fundoAnimado(tl);
+  particulas(tl, 40, 7, 'rgba(255,255,255,.35)');
+  textoSobe('Vídeo programático', W / 2, H * .44, tl, 1.0, .35, { tam: U * 7.2, peso: 800 });
+  maquinaEscrever('Cada frame é código.', W / 2, H * .56, tl, 2.0, 20, { tam: U * 3, cor: PALETA.suave, alinha: 'center' });
+  const lx = W / 2 - U * 18;
+  linhaDesenhada([[lx, H * .63], [W / 2 + U * 18, H * .63]], anim(tl, 1.3, 2.0, 0, 1), PALETA.primaria, U * .5);
+}
+
+function cenaGrafico(tl, p) {
+  fundoGradiente(PALETA.fundo2, PALETA.fundo1, tl * .05);
+  textoSobe('Acessos por mês', W / 2, H * .14, tl, .3, .35, { tam: U * 4.4, peso: 700 });
+  const dados = [{ rotulo: 'Jan', valor: 12 }, { rotulo: 'Fev', valor: 19 }, { rotulo: 'Mar', valor: 27 }, { rotulo: 'Abr', valor: 41 }];
+  barras(dados, W * .18, H * .26, W * .64, H * .52, anim(tl, .8, 2.9, 0, 1, E.outCubic), [PALETA.primaria, PALETA.primaria, PALETA.primaria, PALETA.acento]);
+  const n = contador(0, 41, anim(tl, .8, 2.9, 0, 1, E.outCubic));
+  texto(`${n} mil acessos`, W / 2, H * .88, { tam: U * 4, peso: 700, cor: PALETA.acento, alinha: 'center' });
+}
+
+function cenaPassos(tl, p) {
+  fundoGradiente(PALETA.fundo1, '#062a52', 0);
+  textoSobe('Como funciona', W / 2, H * .16, tl, .2, .35, { tam: U * 4.6, peso: 700 });
+  const itens = ['Roteiro', 'Cenas em código', 'Render com som'];
+  const vertical = H > W;
+  itens.forEach((s, i) => {
+    const x = vertical ? W / 2 : W * (.2 + i * .3), y = vertical ? H * (.32 + i * .2) : H * .5;
+    const ent = anim(tl, .6 + i * .8, 1.1 + i * .8, 0, 1, E.outBack);
+    if (ent <= 0) return;
+    if (i > 0) {
+      const xa = vertical ? W / 2 : W * (.2 + (i - 1) * .3) + U * 7, ya = vertical ? H * (.32 + (i - 1) * .2) + U * 7 : H * .5;
+      seta(xa, ya, vertical ? x : x - U * 7, vertical ? y - U * 7 : y, anim(tl, .4 + i * .8, .7 + i * .8, 0, 1), PALETA.suave, U * .4);
+    }
+    escala(x, y, ent, () => {
+      circulo(x, y, U * 6, PALETA.primaria);
+      check(x, y, U * 6, anim(tl, 2.9, 3.3 + i * .1, 0, 1), '#fff');
+      if (tl < 2.9) texto(String(i + 1), x, y + U * .2, { tam: U * 5, peso: 800, alinha: 'center' });
+    });
+    texto(s, x, y + U * 10, { tam: U * 2.8, peso: 600, alinha: 'center', cor: PALETA.texto, alpha: ent });
+  });
+}
+
+function cenaFinal(tl, p) {
+  fundoAnimado(tl + 20);
+  const s = anim(tl, .4, 1.4, 0, 1, E.outElastic);
+  escala(W / 2, H * .42, s, () => {
+    circulo(W / 2, H * .42, U * 9, PALETA.acento);
+    texto('▶', W / 2 + U * .8, H * .42 + U * .3, { tam: U * 8, peso: 800, cor: PALETA.fundo1, alinha: 'center' });
+  });
+  textoSobe('Feito com canvas + Python', W / 2, H * .68, tl, 1.0, .4, { tam: U * 3.6, peso: 700 });
+  textoSobe('sem vídeo gravado, só código', W / 2, H * .76, tl, 1.4, .4, { tam: U * 2.4, cor: PALETA.suave });
+}
+
+// =====================================================================
+// MOTOR — normalmente não precisa editar abaixo.
+// =====================================================================
+const TAMANHOS = { '16:9': [1280, 720], '1080p': [1920, 1080], '9:16': [720, 1280], '1:1': [1080, 1080], '4:5': [1080, 1350] };
+const [W, H] = TAMANHOS[FORMATO];
+const U = Math.min(W, H) / 100;   // unidade relativa: 1% do menor lado
+const TOTAL = Math.round(DURACAO * FPS);
+const cv = document.getElementById('tela');
+cv.width = W; cv.height = H;
+const ctxTela = cv.getContext('2d');
+const buffers = [0, 1].map(() => { const c = document.createElement('canvas'); c.width = W; c.height = H; return c.getContext('2d'); });
+let ctx = ctxTela;
+const img = {};
+window.pronto = false;
+
+// ---------- tempo e easing ----------
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, p) => a + (b - a) * p;
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const entre = (t, a, b) => t >= a && t < b;
+const E = {
+  linear: p => p,
+  inCubic: p => p * p * p,
+  outCubic: p => 1 - Math.pow(1 - p, 3),
+  inOut: p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2,
+  outBack: p => { const c = 1.70158; return 1 + (c + 1) * Math.pow(p - 1, 3) + c * Math.pow(p - 1, 2); },
+  outElastic: p => p === 0 || p === 1 ? p : Math.pow(2, -10 * p) * Math.sin((p * 10 - .75) * (2 * Math.PI / 3)) + 1,
+  outBounce: p => {
+    const n = 7.5625, d = 2.75;
+    if (p < 1 / d) return n * p * p;
+    if (p < 2 / d) return n * (p -= 1.5 / d) * p + .75;
+    if (p < 2.5 / d) return n * (p -= 2.25 / d) * p + .9375;
+    return n * (p -= 2.625 / d) * p + .984375;
+  }
+};
+// valor animado de 'de' até 'para' entre os segundos a e b
+const anim = (t, a, b, de, para, e = E.inOut) => lerp(de, para, e(prog(t, a, b)));
+function rng(seed) {
+  return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let x = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    x = x + Math.imul(x ^ x >>> 7, 61 | x) ^ x; return ((x ^ x >>> 14) >>> 0) / 4294967296; };
+}
+
+// ---------- primitivas ----------
+function caminho(x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath(); ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+function retangulo(x, y, w, h, r, fill, stroke, lw = 1) {
+  caminho(x, y, w, h, r);
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke(); }
+}
+function circulo(x, y, r, fill, stroke, lw = 1) {
+  ctx.beginPath(); ctx.arc(x, y, Math.max(0, r), 0, Math.PI * 2);
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke(); }
+}
+function fonte(tam, peso = 400) { ctx.font = `${peso} ${tam}px ${FONTE}`; }
+function texto(s, x, y, o = {}) {
+  ctx.save();
+  if (o.alpha !== undefined) ctx.globalAlpha *= clamp(o.alpha);
+  fonte(o.tam || U * 3, o.peso || 400);
+  ctx.fillStyle = o.cor || PALETA.texto; ctx.textAlign = o.alinha || 'left'; ctx.textBaseline = o.base || 'middle';
+  if (o.sombra !== false) { ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = U * .6; ctx.shadowOffsetY = U * .15; }
+  ctx.fillText(s, x, y);
+  const w = ctx.measureText(s).width;
+  ctx.restore();
+  return w;
+}
+function quebrar(s, max, tam, peso = 400) {
+  fonte(tam, peso);
+  const linhas = []; let atual = '';
+  for (const p of s.split(' ')) {
+    const teste = atual ? atual + ' ' + p : p;
+    if (ctx.measureText(teste).width > max && atual) { linhas.push(atual); atual = p; } else atual = teste;
+  }
+  if (atual) linhas.push(atual);
+  return linhas;
+}
+// texto que entra subindo com fade
+function textoSobe(s, x, y, tl, ini, dur, o = {}) {
+  const p = E.outCubic(prog(tl, ini, ini + dur));
+  if (p <= 0) return;
+  texto(s, x, y + (1 - p) * U * 4, { alinha: 'center', ...o, alpha: p * (o.alpha ?? 1) });
+}
+// revela caracteres a 'cps' caracteres por segundo, com cursor piscando
+function maquinaEscrever(s, x, y, tl, ini, cps, o = {}) {
+  if (tl < ini) return;
+  const n = Math.min(s.length, Math.floor((tl - ini) * cps));
+  const parcial = s.slice(0, n);
+  fonte(o.tam || U * 3, o.peso || 400);
+  const total = ctx.measureText(s).width, wp = ctx.measureText(parcial).width;
+  const x0 = (o.alinha || 'left') === 'center' ? x - total / 2 : x;
+  texto(parcial, x0, y, { ...o, alinha: 'left' });
+  if (Math.floor(tl * 2.5) % 2 === 0 || n < s.length) {
+    ctx.fillStyle = o.cor || PALETA.texto; ctx.fillRect(x0 + wp + 2, y - (o.tam || U * 3) * .5, Math.max(2, U * .25), (o.tam || U * 3));
+  }
+}
+// polilinha desenhada até a fração p do comprimento
+function linhaDesenhada(pts, p, cor, lw) {
+  if (p <= 0) return;
+  const seg = []; let tot = 0;
+  for (let i = 1; i < pts.length; i++) { const d = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); seg.push(d); tot += d; }
+  let resta = tot * clamp(p);
+  ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length && resta > 0; i++) {
+    const f = Math.min(1, resta / seg[i - 1]);
+    ctx.lineTo(lerp(pts[i - 1][0], pts[i][0], f), lerp(pts[i - 1][1], pts[i][1], f));
+    resta -= seg[i - 1];
+  }
+  ctx.strokeStyle = cor; ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke();
+}
+function seta(x1, y1, x2, y2, p, cor, lw) {
+  if (p <= 0) return;
+  const xe = lerp(x1, x2, p), ye = lerp(y1, y2, p);
+  linhaDesenhada([[x1, y1], [xe, ye]], 1, cor, lw);
+  if (p < .95) return;
+  const a = Math.atan2(y2 - y1, x2 - x1), s = lw * 3.5;
+  ctx.beginPath(); ctx.moveTo(xe, ye);
+  ctx.lineTo(xe - s * Math.cos(a - .5), ye - s * Math.sin(a - .5));
+  ctx.lineTo(xe - s * Math.cos(a + .5), ye - s * Math.sin(a + .5));
+  ctx.closePath(); ctx.fillStyle = cor; ctx.fill();
+}
+function check(x, y, r, p, cor) {
+  linhaDesenhada([[x - r * .45, y], [x - r * .1, y + r * .35], [x + r * .5, y - r * .35]], p, cor, r * .18);
+}
+// executa fn com escala s em torno de (x, y)
+function escala(x, y, s, fn) {
+  if (s <= 0) return;
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.translate(-x, -y); fn(); ctx.restore();
+}
+// câmera: zoom/pan na cena inteira
+function camera(zoom, cx, cy, fn) {
+  ctx.save(); ctx.translate(W / 2, H / 2); ctx.scale(zoom, zoom); ctx.translate(-cx, -cy); fn(); ctx.restore();
+}
+function fundoGradiente(c1, c2, giro = 0) {
+  const a = Math.PI / 4 + giro, r = Math.hypot(W, H) / 2;
+  const g = ctx.createLinearGradient(W / 2 - Math.cos(a) * r, H / 2 - Math.sin(a) * r, W / 2 + Math.cos(a) * r, H / 2 + Math.sin(a) * r);
+  g.addColorStop(0, c1); g.addColorStop(1, c2);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+}
+function fundoAnimado(tl) {
+  fundoGradiente(PALETA.fundo1, PALETA.fundo2, Math.sin(tl * .3) * .3);
+  [[.2, .3, PALETA.primaria], [.8, .7, PALETA.acento], [.6, .2, PALETA.primaria]].forEach(([fx, fy, cor], i) => {
+    const x = W * (fx + .05 * Math.sin(tl * .5 + i * 2)), y = H * (fy + .05 * Math.cos(tl * .4 + i));
+    const g = ctx.createRadialGradient(x, y, 0, x, y, U * 40);
+    g.addColorStop(0, cor + '55'); g.addColorStop(1, cor + '00');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  });
+}
+function particulas(tl, n, seed, cor) {
+  const r = rng(seed);
+  for (let i = 0; i < n; i++) {
+    const x0 = r() * W, vel = .02 + r() * .06, tam = U * (.15 + r() * .35), fase = r();
+    const y = H - ((fase + tl * vel) % 1) * H * 1.1;
+    circulo(x0 + Math.sin(tl + i) * U, y, tam, cor);
+  }
+}
+function contador(de, para, p, casas = 0) {
+  return lerp(de, para, clamp(p)).toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
+}
+function barras(dados, x, y, w, h, p, cores) {
+  const max = Math.max(...dados.map(d => d.valor)), n = dados.length, gap = w / n * .3, bw = (w - gap * (n + 1)) / n;
+  ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(x, y + h, w, Math.max(1, U * .15));
+  dados.forEach((d, i) => {
+    const pi = clamp(p * n * .6 - i * .5 + .5);
+    const bh = h * (d.valor / max) * E.outBack(pi), bx = x + gap + i * (bw + gap);
+    retangulo(bx, y + h - bh, bw, bh, U * .8, cores[i % cores.length]);
+    texto(d.rotulo, bx + bw / 2, y + h + U * 3, { tam: U * 2.4, alinha: 'center', cor: PALETA.suave });
+    if (pi > .6) texto(String(Math.round(d.valor * clamp(pi))), bx + bw / 2, y + h - bh - U * 2.5, { tam: U * 2.6, peso: 700, alinha: 'center' });
+  });
+}
+function imagem(nome, x, y, w, h, alpha = 1) {
+  if (!img[nome]) return;
+  ctx.save(); ctx.globalAlpha *= alpha; ctx.drawImage(img[nome], x, y, w, h); ctx.restore();
+}
+function legenda(t) {
+  const l = LEGENDAS.find(([a, b]) => entre(t, a, b));
+  if (!l) return;
+  const [a, b, msg] = l;
+  const tam = U * 3.2, ls = quebrar(msg, W * .8, tam, 600), alt = ls.length * tam * 1.3 + U * 3;
+  ctx.save();
+  ctx.globalAlpha = Math.min(prog(t, a, a + .2), 1 - prog(t, b - .2, b));
+  retangulo(W * .08, H - alt - U * 4, W * .84, alt, U * 1.5, 'rgba(0,0,0,.65)');
+  ls.forEach((s, i) => texto(s, W / 2, H - alt - U * 4 + U * 1.5 + tam * .65 + i * tam * 1.3, { tam, peso: 600, alinha: 'center', sombra: false }));
+  ctx.restore();
+}
+
+// ---------- composição com transições ----------
+function renderCena(c, t, alvo) {
+  ctx = alvo;
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.clearRect(0, 0, W, H);
+  const tl = t - c.ini;
+  c.desenhar(tl, clamp(tl / (c.fim - c.ini)));
+  ctx = ctxTela;
+  return alvo.canvas;
+}
+function desenhar(f) {
+  const t = f / FPS;
+  let i = CENAS.findIndex(c => entre(t, c.ini, c.fim));
+  if (i < 0) i = CENAS.length - 1;
+  const atual = CENAS[i], anterior = CENAS[i - 1];
+  const pt = E.inOut(prog(t, atual.ini, atual.ini + DURACAO_TRANSICAO));
+  ctx = ctxTela;
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+  const B = renderCena(atual, t, buffers[1]);
+  if (!anterior || pt >= 1 || atual.transicao === 'corte') {
+    ctx.drawImage(B, 0, 0);
+  } else {
+    const A = renderCena(anterior, t, buffers[0]);
+    switch (atual.transicao) {
+      case 'slide': ctx.drawImage(A, -W * pt, 0); ctx.drawImage(B, W * (1 - pt), 0); break;
+      case 'slideCima': ctx.drawImage(A, 0, -H * pt); ctx.drawImage(B, 0, H * (1 - pt)); break;
+      case 'zoom':
+        ctx.save(); ctx.globalAlpha = 1 - pt; escala(W / 2, H / 2, 1 + pt * .35, () => ctx.drawImage(A, 0, 0)); ctx.restore();
+        ctx.save(); ctx.globalAlpha = pt; escala(W / 2, H / 2, .85 + .15 * pt, () => ctx.drawImage(B, 0, 0)); ctx.restore();
+        break;
+      case 'wipe':
+        ctx.drawImage(A, 0, 0);
+        ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W * pt, H); ctx.clip(); ctx.drawImage(B, 0, 0); ctx.restore();
+        ctx.fillStyle = PALETA.acento; ctx.fillRect(W * pt - U * .6, 0, U * 1.2, H);
+        break;
+      default: ctx.drawImage(A, 0, 0); ctx.save(); ctx.globalAlpha = pt; ctx.drawImage(B, 0, 0); ctx.restore();
+    }
+  }
+  legenda(t);
+}
+
+// ---------- reprodução ----------
+const barra = document.getElementById('barra'), contadorUI = document.getElementById('contador'), btnPlay = document.getElementById('btnPlay');
+barra.max = TOTAL - 1;
+let frame = 0, tocando = true, ultimo = null, acumulado = 0;
+const m = /f=(\d+)/.exec(location.hash);
+if (m) { frame = Math.min(TOTAL - 1, +m[1]); tocando = false; }
+function loop(ts) {
+  if (tocando) {
+    if (ultimo !== null) acumulado += ts - ultimo;
+    ultimo = ts;
+    while (acumulado >= 1000 / FPS) { acumulado -= 1000 / FPS; if (++frame >= TOTAL) { frame = 0; break; } }
+  } else { ultimo = null; acumulado = 0; }
+  desenhar(frame);
+  barra.value = frame;
+  contadorUI.textContent = `frame ${frame} / ${TOTAL - 1}  (${(frame / FPS).toFixed(2)}s)  ${W}x${H}`;
+  btnPlay.textContent = tocando ? 'Pausar' : 'Reproduzir';
+  requestAnimationFrame(loop);
+}
+btnPlay.onclick = () => { tocando = !tocando; };
+document.getElementById('btnPrev').onclick = () => { tocando = false; frame = Math.max(0, frame - 1); };
+document.getElementById('btnNext').onclick = () => { tocando = false; frame = Math.min(TOTAL - 1, frame + 1); };
+barra.oninput = () => { tocando = false; frame = +barra.value; };
+
+Promise.all(Object.entries(IMAGENS).map(([k, src]) => new Promise((ok, falha) => {
+  const i = new Image(); i.onload = () => { img[k] = i; ok(); }; i.onerror = () => falha(new Error('Imagem não carregou: ' + src)); i.src = src;
+}))).then(() => document.fonts.ready).then(() => { window.pronto = true; requestAnimationFrame(loop); })
+  .catch(e => { document.body.insertAdjacentHTML('beforeend', `<p style="color:#ff6b6b">${e.message}</p>`); });
+</script>
+</body>
+</html>

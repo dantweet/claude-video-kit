@@ -1,0 +1,14 @@
+# Artefatos de teste e render gerados ao usar as skills — não versionar
+*.mp4
+*.webm
+preview.png
+_log_mp4.txt
+*.log
+
+# Python
+__pycache__/
+*.pyc
+
+# SO
+.DS_Store
+Thumbs.db

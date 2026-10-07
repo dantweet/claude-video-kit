@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Animação frame a frame</title>
+<style>
+  body { margin: 0; padding: 16px; background: #1d2533; color: #e8edf3; font-family: "Segoe UI", Arial, sans-serif;
+         display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  canvas { width: min(100%, 1280px); height: auto; border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,.45); background: #000; }
+  .controles { width: min(100%, 1280px); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .controles button { background: #2d3a4f; color: #fff; border: 1px solid #44536b; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 14px; }
+  .controles input[type=range] { flex: 1; min-width: 200px; }
+  #contador { font-variant-numeric: tabular-nums; min-width: 190px; text-align: right; font-size: 13px; color: #b9c4d3; }
+</style>
+</head>
+<body>
+<canvas id="tela" width="1280" height="720"></canvas>
+<div class="controles">
+  <button id="btnPlay">Pausar</button>
+  <button id="btnPrev">&#9664; frame</button>
+  <button id="btnNext">frame &#9654;</button>
+  <input id="barra" type="range" min="0" value="0">
+  <span id="contador"></span>
+  <button id="btnGravar">Exportar .webm (sem som)</button>
+</div>
+<script>
+// =====================================================================
+// ROTEIRO — edite esta seção. Tempos em segundos; coordenadas em 1280x720.
+// desenhar(f) precisa ser função pura do número do frame (sem Date.now / Math.random).
+// =====================================================================
+const TITULO = 'Nome do sistema — passo a passo';
+const SUBTITULO = 'Exemplo: preencher um cadastro e salvar';
+const FPS = 30;
+const DURACAO = 14;
+const ABERTURA = 2.6;        // fim da tela de abertura
+const ENCERRAMENTO = 10.8;   // início da tela final
+const TEMA = {
+  primaria: '#003974', destaque: '#199ed8', fundo: '#f5f7fa', texto: '#344054', muted: '#667085',
+  borda: '#e3e8ee', sucesso: '#28a745', alerta: '#ff8c00'
+};
+
+// [segundo, x, y] — o cursor interpola com easing entre os pontos
+const CURSOR = [
+  [0, 640, 420], [ABERTURA + .4, 640, 420], [3.6, 520, 266], [5.6, 520, 266], [6.3, 760, 358],
+  [8.6, 760, 358], [9.6, 660, 470], [DURACAO, 660, 470]
+];
+
+// Eventos sonoros lidos pelo renderizador (renderizar_mp4.py).
+// tipos: clique | digitar (usa dur) | sucesso | erro | whoosh | notificacao
+const SONS = [
+  { t: 3.8, tipo: 'clique' },
+  { t: 4.2, tipo: 'digitar', dur: 1.2 },
+  { t: 6.5, tipo: 'clique' },
+  { t: 7.2, tipo: 'sucesso' },
+  { t: ENCERRAMENTO, tipo: 'whoosh' }
+];
+
+// [ini, fim, passo, texto]
+const LEGENDAS = [
+  [ABERTURA, 3.9, 1, 'Clique no campo Nome.'],
+  [3.9, 5.8, 2, 'Digite o nome do cliente.'],
+  [5.8, 7.2, 3, 'Clique em Salvar.'],
+  [7.2, ENCERRAMENTO, 3, 'Pronto! O sistema confirma o cadastro.']
+];
+const TOTAL_PASSOS = 3;
+
+// Cena principal (entre ABERTURA e ENCERRAMENTO)
+function cena(t) {
+  ctx.fillStyle = TEMA.fundo; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = TEMA.primaria; ctx.fillRect(0, 0, W, 56);
+  texto('Meu Sistema', 28, 28, { tam: 20, peso: 700, cor: '#fff' });
+
+  texto('Cadastro de Cliente', 300, 150, { tam: 24, peso: 700, cor: TEMA.primaria });
+  caixa(300, 180, 680, 260, 10, '#fff', TEMA.borda);
+  texto('Nome', 330, 230, { tam: 13, peso: 600 });
+  const foco = t >= 3.8;
+  caixa(330, 248, 620, 38, 5, '#fff', foco ? TEMA.destaque : '#ced4da', foco ? 2 : 1);
+  const nome = 'Maria Exemplo';
+  const n = Math.floor(nome.length * prog(t, 4.2, 5.4));
+  const digitado = nome.slice(0, n);
+  const largura = texto(digitado, 342, 267, { tam: 15 });
+  if (foco && t < 6.5 && Math.floor(t * 2) % 2 === 0) { ctx.fillStyle = TEMA.texto; ctx.fillRect(343 + largura, 256, 1.5, 22); }
+
+  const salvando = entre(t, 6.5, 7.2);
+  botao(820, 340, 130, 40, 'Salvar', 'primary', { hover: sobre(820, 340, 130, 40), carregando: salvando, t, textoCarregando: 'Salvando' });
+  destaque(820, 340, 130, 40, t, fade(t, 5.8, 6.6));
+
+  toast(t, 7.2, 10.2, 'Sucesso', 'Cliente cadastrado com sucesso.');
+}
+
+// Tela final (resumo)
+function telaFinal(t) {
+  ctx.fillStyle = TEMA.fundo; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = TEMA.primaria; ctx.fillRect(0, 0, W, 6);
+  texto('Resumo', W / 2, 150, { tam: 32, peso: 700, cor: TEMA.primaria, alinha: 'center' });
+  ['Clique no campo Nome', 'Digite o nome', 'Clique em Salvar'].forEach((s, i) => {
+    const p = ease(prog(t, ENCERRAMENTO + .5 + i * .5, ENCERRAMENTO + 1 + i * .5));
+    if (p <= 0) return;
+    ctx.save(); ctx.globalAlpha *= p;
+    caixa(440, 220 + i * 80, 400, 60, 12, '#fff', TEMA.borda);
+    ctx.beginPath(); ctx.arc(480, 250 + i * 80, 16, 0, Math.PI * 2); ctx.fillStyle = TEMA.destaque; ctx.fill();
+    texto(String(i + 1), 480, 251 + i * 80, { tam: 15, peso: 700, cor: '#fff', alinha: 'center' });
+    texto(s, 512 + (1 - p) * 12, 250 + i * 80, { tam: 18 });
+    ctx.restore();
+  });
+}
+
+// =====================================================================
+// MOTOR — normalmente não precisa editar abaixo.
+// =====================================================================
+const cv = document.getElementById('tela');
+const ctx = cv.getContext('2d');
+const W = 1280, H = 720, TOTAL = DURACAO * FPS;
+const FONT = '"Segoe UI", Arial, sans-serif';
+const CLIQUES = SONS.filter(s => s.tipo === 'clique').map(s => s.t);
+
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, p) => a + (b - a) * p;
+const ease = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const entre = (t, a, b) => t >= a && t < b;
+const fade = (t, a, b, d = .25) => Math.min(prog(t, a, a + d), 1 - prog(t, b - d, b));
+
+function caminho(x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath(); ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+function caixa(x, y, w, h, r, fill, stroke, lw = 1) {
+  caminho(x, y, w, h, r);
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke(); }
+}
+function fonte(tam, peso = 400) { ctx.font = `${peso} ${tam}px ${FONT}`; }
+function caber(s, max) {
+  if (ctx.measureText(s).width <= max) return s;
+  while (s.length > 1 && ctx.measureText(s + '…').width > max) s = s.slice(0, -1);
+  return s + '…';
+}
+function texto(s, x, y, o = {}) {
+  fonte(o.tam || 13, o.peso || 400);
+  ctx.fillStyle = o.cor || TEMA.texto; ctx.textAlign = o.alinha || 'left'; ctx.textBaseline = o.base || 'middle';
+  if (o.max) s = caber(s, o.max);
+  ctx.fillText(s, x, y);
+  return ctx.measureText(s).width;
+}
+function quebrar(s, max, tam, peso = 400) {
+  fonte(tam, peso);
+  const linhas = []; let atual = '';
+  for (const p of s.split(' ')) {
+    const teste = atual ? atual + ' ' + p : p;
+    if (ctx.measureText(teste).width > max && atual) { linhas.push(atual); atual = p; } else atual = teste;
+  }
+  if (atual) linhas.push(atual);
+  return linhas;
+}
+function badge(cx, cy, s, bg, fg, tam = 10) {
+  fonte(tam, 600);
+  const w = ctx.measureText(s).width + 14;
+  caixa(cx - w / 2, cy - (tam + 8) / 2, w, tam + 8, (tam + 8) / 2, bg);
+  texto(s, cx, cy + .5, { tam, peso: 600, cor: fg, alinha: 'center' });
+  return w;
+}
+function spinner(cx, cy, r, t, cor) {
+  ctx.beginPath(); ctx.arc(cx, cy, r, t * 8, t * 8 + 4.4);
+  ctx.strokeStyle = cor; ctx.lineWidth = 2; ctx.stroke();
+}
+function destaque(x, y, w, h, t, a = 1) {
+  if (a <= 0) return;
+  ctx.save(); ctx.globalAlpha *= a * (.6 + .4 * Math.sin(t * 7));
+  caixa(x - 5, y - 5, w + 10, h + 10, 8, null, TEMA.alerta, 3);
+  ctx.restore();
+}
+
+const ESTILOS = {
+  primary: { bg: '#007bff', bgH: '#0069d9', fg: '#fff' },
+  success: { bg: '#28a745', bgH: '#218838', fg: '#fff' },
+  warning: { bg: '#ffc107', bgH: '#e0a800', fg: '#212529' },
+  danger: { bg: '#dc3545', bgH: '#c82333', fg: '#fff' },
+  outline: { bg: '#fff', bgH: '#f1f3f5', fg: '#495057', borda: '#adb5bd' }
+};
+function botao(x, y, w, h, rotulo, estilo, o = {}) {
+  const e = ESTILOS[estilo];
+  caixa(x, y, w, h, 5, o.hover ? e.bgH : e.bg, e.borda);
+  if (o.hover && estilo !== 'outline') caixa(x - 2, y - 2, w + 4, h + 4, 7, null, 'rgba(0,123,255,.25)', 3);
+  if (o.carregando) {
+    spinner(x + 18, y + h / 2, 6, o.t, e.fg);
+    texto(o.textoCarregando || 'Aguarde', x + 30, y + h / 2, { tam: 13, peso: 600, cor: e.fg });
+  } else texto(rotulo, x + w / 2, y + h / 2, { tam: 13, peso: 600, cor: e.fg, alinha: 'center' });
+}
+function toast(t, ini, fim, titulo, msg, cor = TEMA.sucesso, bg = '#d4edda', fg = '#155724') {
+  if (!entre(t, ini, fim)) return;
+  const x = lerp(W + 10, W - 330, ease(prog(t, ini, ini + .3))) + ease(prog(t, fim - .3, fim)) * 340;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.2)'; ctx.shadowBlur = 12;
+  caixa(x, 70, 310, 66, 6, bg);
+  ctx.shadowColor = 'transparent';
+  ctx.fillStyle = cor; ctx.fillRect(x, 70, 5, 66);
+  texto(titulo, x + 20, 90, { tam: 14, peso: 700, cor: fg });
+  texto(msg, x + 20, 113, { tam: 13, cor: fg, max: 280 });
+  ctx.restore();
+}
+
+let cur = { x: 0, y: 0 }, cursorVisivel = false, camadaAtiva = 'pagina';
+function posCursor(t) {
+  for (let i = 0; i < CURSOR.length - 1; i++) {
+    const [a, ax, ay] = CURSOR[i], [b, bx, by] = CURSOR[i + 1];
+    if (t >= a && t < b) { const p = ease(prog(t, a, b)); return { x: lerp(ax, bx, p), y: lerp(ay, by, p) }; }
+  }
+  const u = CURSOR[CURSOR.length - 1];
+  return { x: u[1], y: u[2] };
+}
+// camada: use 'dialogo' para elementos de um modal aberto (camadaAtiva = 'dialogo' bloqueia hover da página)
+function sobre(x, y, w, h, camada = 'pagina') {
+  return cursorVisivel && camadaAtiva === camada && cur.x >= x && cur.x <= x + w && cur.y >= y && cur.y <= y + h;
+}
+function desenharCursor(t) {
+  if (!cursorVisivel) return;
+  for (const c of CLIQUES) {
+    if (entre(t, c, c + .45)) {
+      const p = prog(t, c, c + .45), pc = posCursor(c);
+      ctx.beginPath(); ctx.arc(pc.x, pc.y, lerp(4, 28, p), 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(25,158,216,${.35 * (1 - p)})`; ctx.fill();
+      ctx.strokeStyle = `rgba(25,158,216,${.9 * (1 - p)})`; ctx.lineWidth = 2; ctx.stroke();
+    }
+  }
+  const s = CLIQUES.some(c => entre(t, c, c + .12)) ? 1 : 1.15;
+  ctx.save();
+  ctx.translate(cur.x, cur.y); ctx.scale(s, s);
+  ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, 0); ctx.lineTo(0, 17); ctx.lineTo(4.5, 13); ctx.lineTo(7.5, 20);
+  ctx.lineTo(10, 19); ctx.lineTo(7, 12); ctx.lineTo(12.5, 12); ctx.closePath();
+  ctx.fillStyle = '#fff'; ctx.fill();
+  ctx.shadowColor = 'transparent'; ctx.strokeStyle = '#111'; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.restore();
+}
+function legenda(t) {
+  const l = LEGENDAS.find(([a, b]) => entre(t, a, b));
+  if (!l) return;
+  const [a, b, passo, msg] = l;
+  const prev = LEGENDAS.find(x => x[1] === a), next = LEGENDAS.find(x => x[0] === b);
+  ctx.save();
+  ctx.globalAlpha = Math.min(prev ? 1 : prog(t, a, a + .25), next ? 1 : 1 - prog(t, b - .25, b));
+  caixa(120, 644, 1040, 62, 10, 'rgba(16,24,40,.9)');
+  caixa(136, 660, 110, 30, 15, TEMA.destaque);
+  texto(`PASSO ${passo}/${TOTAL_PASSOS}`, 191, 675.5, { tam: 13, peso: 700, cor: '#fff', alinha: 'center' });
+  const ls = quebrar(msg, 880, 16, 500);
+  ls.forEach((s, i) => texto(s, 262, 675 + (i - (ls.length - 1) / 2) * 21, { tam: 16, peso: 500, cor: '#fff' }));
+  ctx.restore();
+}
+function abertura(t) {
+  const a = 1 - prog(t, ABERTURA - .6, ABERTURA);
+  if (a <= 0) return;
+  ctx.save(); ctx.globalAlpha = a;
+  const g = ctx.createLinearGradient(0, 0, W, H);
+  g.addColorStop(0, '#0b1a33'); g.addColorStop(1, TEMA.primaria);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  const p = ease(prog(t, .2, .9));
+  ctx.globalAlpha = a * p;
+  texto(TITULO, W / 2, 320 + (1 - p) * 20, { tam: 40, peso: 700, cor: '#fff', alinha: 'center' });
+  ctx.globalAlpha = a * ease(prog(t, .7, 1.4));
+  texto(SUBTITULO, W / 2, 376, { tam: 18, cor: 'rgba(255,255,255,.8)', alinha: 'center' });
+  ctx.fillStyle = TEMA.destaque; ctx.fillRect(W / 2 - 40, 410, 80 * ease(prog(t, 1, 1.8)), 3);
+  ctx.restore();
+}
+
+function desenhar(f) {
+  const t = f / FPS;
+  cur = posCursor(t);
+  cursorVisivel = t >= ABERTURA && t < ENCERRAMENTO - .2;
+  camadaAtiva = 'pagina';
+  ctx.clearRect(0, 0, W, H);
+  cena(t);
+  desenharCursor(t);
+  legenda(t);
+  abertura(t);
+  const af = prog(t, ENCERRAMENTO, ENCERRAMENTO + .6);
+  if (af > 0) { ctx.save(); ctx.globalAlpha = af; telaFinal(t); ctx.restore(); }
+}
+
+// ---------- reprodução ----------
+const barra = document.getElementById('barra'), contador = document.getElementById('contador');
+const btnPlay = document.getElementById('btnPlay'), btnGravar = document.getElementById('btnGravar');
+barra.max = TOTAL - 1;
+let frame = 0, tocando = true, ultimo = null, acumulado = 0, gravador = null;
+const m = /f=(\d+)/.exec(location.hash);
+if (m) { frame = Math.min(TOTAL - 1, +m[1]); tocando = false; }
+
+function loop(ts) {
+  if (tocando) {
+    if (ultimo !== null) acumulado += ts - ultimo;
+    ultimo = ts;
+    while (acumulado >= 1000 / FPS) {
+      acumulado -= 1000 / FPS;
+      if (++frame >= TOTAL) {
+        if (gravador) { frame = TOTAL - 1; tocando = false; gravador.stop(); } else frame = 0;
+        break;
+      }
+    }
+  } else { ultimo = null; acumulado = 0; }
+  desenhar(frame);
+  barra.value = frame;
+  contador.textContent = `frame ${frame} / ${TOTAL - 1}  (${(frame / FPS).toFixed(2)}s)`;
+  btnPlay.textContent = tocando ? 'Pausar' : 'Reproduzir';
+  requestAnimationFrame(loop);
+}
+btnPlay.onclick = () => { tocando = !tocando; };
+document.getElementById('btnPrev').onclick = () => { tocando = false; frame = Math.max(0, frame - 1); };
+document.getElementById('btnNext').onclick = () => { tocando = false; frame = Math.min(TOTAL - 1, frame + 1); };
+barra.oninput = () => { tocando = false; frame = +barra.value; };
+btnGravar.onclick = () => {
+  if (gravador) return;
+  const tipo = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find(x => MediaRecorder.isTypeSupported(x));
+  const pedacos = [];
+  gravador = new MediaRecorder(cv.captureStream(FPS), { mimeType: tipo, videoBitsPerSecond: 8e6 });
+  gravador.ondataavailable = e => e.data.size && pedacos.push(e.data);
+  gravador.onstop = () => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(pedacos, { type: 'video/webm' }));
+    a.download = 'animacao.webm'; a.click();
+    gravador = null;
+  };
+  frame = 0; acumulado = 0; ultimo = null; tocando = true;
+  gravador.start();
+};
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
